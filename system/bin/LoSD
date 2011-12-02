@@ -70,7 +70,7 @@ fix_los()
 {
   # First and foremost, do not touch the radio during an active phone call.
 
-  if [ $(dumpsys telephony.registry | grep -c mCallState=1) -gt 0 ]; then
+  if [ $(dumpsys telephony.registry | grep -c mCallState=0) -lt 1 ]; then
     log -p i -t LoSD "Active phone call, skipping restart."
     return
   fi
