@@ -1,6 +1,0 @@
-#!/system/bin/sh
-
-# start LoS Daemon
-
-/system/bin/LoSD &
-
