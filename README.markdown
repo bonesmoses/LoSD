@@ -36,7 +36,7 @@ LOGS
 
 You can get logs from the system for this service by using logcat through ADB:
 
-logcat -s LoSD:*
+    logcat -s LoSD:*
 
 This will only show LoSD-related events. You may want to do this to make sure
 LoSD is running properly the first few times you run it.
@@ -44,6 +44,7 @@ LoSD is running properly the first few times you run it.
 CREDITS
 -------
 
-This utility was written by Trifthen, and was originally inspired by
--viperboy- at XDA (xda-developers.com), and later revisions by HaiKaiDo.
+* Author: Trifthen
+* Inspiration: [-viperboy-](http://forum.xda-developers.com/member.php?u=518868)
+* RILD restart method: [HaiKaiDo](http://forum.xda-developers.com/member.php?u=2422984)
 
