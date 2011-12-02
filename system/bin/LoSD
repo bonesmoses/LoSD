@@ -1,0 +1,171 @@
+#!/system/bin/sh
+
+### BEGIN DAEMON INFO
+# Provides:          LoSD
+# Short-Description: Monitors and repairs unresponsive phone CDMA radio
+# Long-Description:  Some phones have flakey CDMA radios. As such, they will
+#                    be unable to stay connected to the carrier's towers. This
+#                    daemon will detect these occurrences and attempt to
+#                    repair them.
+# Version:           0.6.0
+# Date:              2011-12-01
+### END DAEMON INFO
+
+SLEEP=120                   # Seconds between LoS checks
+LOGPATH=/data/local/LoSD    # Directory where logs should be saved
+
+# Don't edit below this line!
+################################################################################
+
+# Function Definitions
+
+###
+ # Dump system logs to a path readable by a regular user.
+ #
+ # When the script encounters an error, logs are sent to a directory
+ # configured at the top of the script. These logs will help determine the
+ # cause of the LoS and possibly aid in revising the detection process.
+ #
+ # Logs are stored in a directory named after a timestamp of the full
+ # year, date, and time of the LoS, in YYYY-MM-DD_HH:MM:SS format. It is
+ # safe to read or remove these logs as the user decides.
+##
+dump_logs()
+{
+  # Always have a path to log to. The user can configure it, so it's our job
+  # to make sure it's there.
+
+  if [ ! -d $LOGPATH ]; then
+    busybox mkdir -p $LOGPATH
+  fi
+
+  mkdir $LOGPATH/temp
+
+  dmesg > $LOGPATH/temp/dmesg.log
+  bugreport -d > $LOGPATH/temp/bugreport.log
+  dumpsys connectivity > $LOGPATH/temp/connectivity.log
+  logcat -v time -d -s LoSD:* > $LOGPATH/temp/LoSD.log
+  logcat -b radio -v time -d -s LoSD:* > $LOGPATH/temp/radio.log
+
+  mv $LOGPATH/temp $LOGPATH/$(date +"%Y-%m-%d_%H:%M:%S")
+
+  # We've dumped the logs, now clear logcat so we quit triggering on the
+  # same events!
+
+  logcat -b radio -c
+  logcat -b default -c
+}
+
+###
+ # Repair the RILD radio daemon, or restart the phone.
+ #
+ # In order to repair the radio, we must either restart the RILD radio daemon
+ # or restart the phone if that fails. Before doing so, we must check to see
+ # if the user is on an active call, or in airplane mode---both of which
+ # suggest either a false positive, or an intentionally disconnected state.
+ # No matter which solution we choose, we must trigger a log dump for forensic
+ # purposes.
+##
+fix_los()
+{
+  # First and foremost, do not touch the radio during an active phone call.
+
+  if [ $(dumpsys telephony.registry | grep -c mCallState=1) -gt 0 ]; then
+    log -p i -t LoSD "Active phone call, skipping restart."
+    return
+  fi
+
+  # Next, make sure we're not in airplane mode. We should never reboot
+  # in that case, because the LoS is intentional.
+
+  if [ $(dumpsys location | grep -c 'AirplaneMode 1' -gt 0) ]; then
+    log -p i -t LoSD "Airplane mode detected, skipping restart."
+    return
+  fi
+
+  # Now, try to kill the radio daemon. In some cases, this can fix LoS. Then
+  # wait 10 seconds. If the radio has not yet restarted, or the service is
+  # still lost, continue to the reboot step.
+
+  log -p w -t LoSD "Attempting to kill radio daemon..."
+  killall rild
+  sleep 10
+
+  # No matter what kind of LoS, the radio should now be available. In some
+  # cases of ghost LoS, killing the radio will put it into full LoS. Either
+  # way, if the radio still isn't available, it's reboot time!
+
+  bRadio=$(dumpsys connectivity | grep "mobile\[" | grep -c "able: true")
+  if [ $bRadio -eq 1 ]; then
+    log -p i -t LoSD "RILD restart successful."
+    dump_logs
+    return
+  fi
+
+  # :(
+
+  log -p e -t LoSD "RILD restart failed. Rebooting."
+  dump_logs
+  reboot
+}
+
+# Program Body
+
+log -p i -t LoSD "LoSD Starting"
+
+# Enter the main program loop. We sleep first so we can abort after each
+# check and immediately wait for the next iteration of checks.
+
+while : ; do
+
+  sleep $SLEEP
+
+  # Grab connectivity status from the system. We can use this string for
+  # several checks.
+
+  sConnStatus=$(dumpsys connectivity | grep "mobile\[")
+
+  # In some cases of ghost LoS, the radio gets confused and doesn't know its
+  # own state. We check this first because it's independant of the perceived
+  # radio status.
+
+  if [ "${sConnStatus#*UNKNOWN/UNKNOWN}" != "$sConnStatus" ]; then
+    log -p i -t LoSD "Detected ghost LoS."
+    fix_los
+    continue
+  fi
+
+  # "isAvailable: true" is the next check. No matter the state of any other
+  # radio, the CDMA radio should *always* be available.
+
+  if [ "${sConnStatus#*isAvailable: false}" != "$sConnStatus" ]; then
+    log -p i -t LoSD "Confirmed radio unavailable."
+    fix_los
+    continue
+  fi
+
+  # In other cases of ghost LoS, the RILClient goes wacko. We can check for
+  # that by getting a logcat and looking for error state.
+
+  if [ $(logcat -b radio -d -s RILClient:E | grep -c ': Error') -gt 1 ]; then
+    log -p i -t LoSD "Detected bad RIL Client - ghost LoS."
+    fix_los
+    continue
+  fi
+
+  # In the same idea as the RILClient, sometimes RILJ just does crazy with
+  # GENERIC_FAILURE messages. That's definitely not normal.
+
+  if [ $(logcat -b radio -d -s RILJ:D | grep -c GENERIC_FAILURE) -gt 1 ]; then
+    log -p i -t LoSD "Detected bad RILJ daemon - ghost LoS."
+    fix_los
+    continue
+  fi
+
+  # If we got this far, the radio has no *known* defects. Say so and restart
+  # the loop.
+
+  log -p i -t LoSD "Radio appears normal - no LoS."
+
+done
+
