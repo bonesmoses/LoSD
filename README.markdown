@@ -26,7 +26,7 @@ USAGE
 If you just obtained the script, simply place it somewhere on your android
 phone that is mounted as an executable partition, and execute it in a shell:
 
-LoSD &
+    LoSD &
 
 At that point, it will begin checking for loss of service and repairing it
 when encountered.
