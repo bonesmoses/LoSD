@@ -7,12 +7,21 @@
 #                    be unable to stay connected to the carrier's towers. This
 #                    daemon will detect these occurrences and attempt to
 #                    repair them.
-# Version:           0.6.0
-# Date:              2011-12-01
+# Version:           0.7.0
+# Date:              2011-12-02
 ### END DAEMON INFO
 
-SLEEP=120                   # Seconds between LoS checks
-LOGPATH=/data/local/LoSD    # Directory where logs should be saved
+# Change these in /data/local/LoSD/LoSD.ini
+################################################################################
+
+if [ -f /data/local/LoSD/LoSD.ini ]; then
+  . /data/local/LoSD/LoSD.ini
+fi
+
+SLEEP=${SLEEP:-120}                     # Seconds between LoS checks
+LOGPATH=${LOGPATH:-/data/local/LoSD}    # Directory where logs should be saved
+DUMPLOGS=${DUMPLOGS:-1}                 # Should we dump logs during fix?
+RESTARTS=${RESTARTS:-2}                 # RILD restarts before full reboot
 
 # Don't edit below this line!
 ################################################################################
@@ -45,7 +54,7 @@ dump_logs()
   bugreport -d > $LOGPATH/temp/bugreport.log
   dumpsys connectivity > $LOGPATH/temp/connectivity.log
   logcat -v time -d -s LoSD:* > $LOGPATH/temp/LoSD.log
-  logcat -b radio -v time -d -s LoSD:* > $LOGPATH/temp/radio.log
+  logcat -b radio -v time -d > $LOGPATH/temp/radio.log
 
   mv $LOGPATH/temp $LOGPATH/$(date +"%Y-%m-%d_%H:%M:%S")
 
@@ -84,28 +93,35 @@ fix_los()
   fi
 
   # Now, try to kill the radio daemon. In some cases, this can fix LoS. Then
-  # wait 10 seconds. If the radio has not yet restarted, or the service is
-  # still lost, continue to the reboot step.
+  # wait 10 seconds. We do this as many times as requested, in case we merely
+  # promoted a ghost LoS to a full LoS. If the radio has not yet restarted,
+  # or the service is still lost, continue to the reboot step.
 
-  log -p w -t LoSD "Attempting to kill radio daemon..."
-  killall rild
-  sleep 10
+  for nTry in $(seq 1 1 ${RESTARTS}); do
+    log -p w -t LoSD "Attempt #${nTry} to kill radio daemon..."
+    killall rild
+    sleep 10
 
-  # No matter what kind of LoS, the radio should now be available. In some
-  # cases of ghost LoS, killing the radio will put it into full LoS. Either
-  # way, if the radio still isn't available, it's reboot time!
+    # No matter what kind of LoS, the radio should now be available. In some
+    # cases of ghost LoS, killing the radio will put it into full LoS. Either
+    # way, if the radio still isn't available, it's reboot time!
 
-  bRadio=$(dumpsys connectivity | grep "mobile\[" | grep -c "able: true")
-  if [ $bRadio -eq 1 ]; then
-    log -p i -t LoSD "RILD restart successful."
-    dump_logs
-    return
-  fi
+    bRadio=$(dumpsys connectivity | grep "mobile\[" | grep -c "able: true")
+    if [ $bRadio -eq 1 ]; then
+      log -p i -t LoSD "RILD restart successful."
+      if [ $DUMPLOGS -eq 1 ]; then
+        dump_logs
+      fi
+      return
+    fi
+  done # End RILD restart loop
 
   # :(
 
   log -p e -t LoSD "RILD restart failed. Rebooting."
-  dump_logs
+  if [ $DUMPLOGS -eq 1 ]; then
+    dump_logs
+  fi
   reboot
 }
 
