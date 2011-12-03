@@ -43,20 +43,23 @@ you must either restart the daemon, or reboot your phone.
 
 Currently recognized settings:
 
-* **SLEEP**
+* **DEBUG**
 
-    How long to wait between radio checks, in seconds. Default is two minutes.
-
-* **LOGPATH**
-
-    Full path to where logs should be dumped. Default is /usr/local/LoSD
-    because the daemon knows that directory exists. Feel free to place it
-    somewhere on your SD card.
+    Many log entries are only informative in nature. To prevent these from
+    being entered into the system logs and LoSD.log, set this to 0.
+    Default is 1.
 
 * **DUMPLOGS**
 
     Whether or not logs should be dumped during a LoS repair or system reboot.
     Should be 0 for false, or 1 for true. Default is curently 1.
+
+* **LOGPATH**
+
+    Full path to where logs should be dumped. This is also where LoSD keeps
+    its own LoSD.log file. Default is /usr/local/LoSD because the daemon
+    knows that directory exists. Feel free to place it somewhere on your
+    SD card.
 
 * **RESTARTS**
 
@@ -64,6 +67,10 @@ Currently recognized settings:
     up and initiating a system reboot. Default is 2. This setting was primarily
     defined because ghost LoS can sometimes degrade into full LoS, and
     subsequent radio restarts may be necessary to regain service.
+
+* **SLEEP**
+
+    How long to wait between radio checks, in seconds. Default is two minutes.
 
 **Example:**
 
@@ -79,7 +86,7 @@ shell or terminal:
     nohup LoSD &
 
 The `nohup` is there to prevent the command from attaching to your TTY, so
-you can disconnect without your session hanging. Feel free to ommit this if
+you can disconnect without your session hanging. Feel free to omit this if
 you were just going to close your TTY.
 
 LOGS
