@@ -7,8 +7,8 @@
 #                    be unable to stay connected to the carrier's towers. This
 #                    daemon will detect these occurrences and attempt to
 #                    repair them.
-# Version:           0.7.0
-# Date:              2011-12-02
+# Version:           0.7.1
+# Date:              2011-12-03
 ### END DAEMON INFO
 
 # Change these in /data/local/LoSD/LoSD.ini
@@ -87,7 +87,7 @@ fix_los()
   # Next, make sure we're not in airplane mode. We should never reboot
   # in that case, because the LoS is intentional.
 
-  if [ $(dumpsys location | grep -c 'AirplaneMode 1' -gt 0) ]; then
+  if [ $(dumpsys location | grep -c 'AirplaneMode 1') -gt 0 ]; then
     log -p i -t LoSD "Airplane mode detected, skipping restart."
     return
   fi

@@ -1,3 +1,6 @@
+Version 0.7.1
+ * Fixed typo in AirplaneMode check. Should no longer reboot in airplane mode.
+
 Version 0.7.0
  * Fixed bug in radio log dump.
  * Now tries multiple times to restart RILD before reboot.
