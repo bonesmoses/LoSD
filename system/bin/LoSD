@@ -7,7 +7,7 @@
 #                    be unable to stay connected to the carrier's towers. This
 #                    daemon will detect these occurrences and attempt to
 #                    repair them.
-# Version:           0.7.1
+# Version:           0.8.0
 # Date:              2011-12-03
 ### END DAEMON INFO
 
@@ -18,10 +18,11 @@ if [ -f /data/local/LoSD/LoSD.ini ]; then
   . /data/local/LoSD/LoSD.ini
 fi
 
-SLEEP=${SLEEP:-120}                     # Seconds between LoS checks
-LOGPATH=${LOGPATH:-/data/local/LoSD}    # Directory where logs should be saved
+DEBUG=${DEBUG:-1}                       # Debug messages in logs? 0/1.
 DUMPLOGS=${DUMPLOGS:-1}                 # Should we dump logs during fix?
+LOGPATH=${LOGPATH:-/data/local/LoSD}    # Directory where logs should be saved
 RESTARTS=${RESTARTS:-2}                 # RILD restarts before full reboot
+SLEEP=${SLEEP:-120}                     # Seconds between LoS checks
 
 # Don't edit below this line!
 ################################################################################
@@ -58,11 +59,40 @@ dump_logs()
 
   mv $LOGPATH/temp $LOGPATH/$(date +"%Y-%m-%d_%H:%M:%S")
 
-  # We've dumped the logs, now clear logcat so we quit triggering on the
-  # same events!
+  # Clear the radio log so we stop re-detecting repaired LoS events.
 
   logcat -b radio -c
-  logcat -b default -c
+}
+
+###
+ # Record LoS events in the LoSD log file. Wrapper for system logging.
+ #
+ # The LoSD log file is located in the LOGPATH directory named LoSD.log, and
+ # will persist across reboots. Unlike the system log, we want to keep a
+ # running total of los events, in case the user set DUMPLOGS to false. This
+ # log is much smaller, and ideally should be much smaller than a few kb.
+ #
+ # Each entry in the log gets a time and date stamp.
+ #
+ # @param String   Message to log.
+ # @param String   Type of message: i=info, w=warning, e=error. Default: i.
+##
+log_los()
+{
+  sMessage=$1
+  sLogType='Info'
+
+  if [ "$2" == 'w' ]; then
+    sLogType='Warning'
+  elif [ "$2" == 'e' ]; then
+    sLogType='Error'
+  fi
+
+  if [ "$sLogType" != 'Info' ] || [ $DEBUG -gt 0 ]; then
+    echo "$(date +'%Y-%m-%d %H:%M:%S') : $sLogType : $sMessage" >> \
+         $LOGPATH/LoSD.log
+    log -p $sLogType -t LoSD "$sMessage"
+  fi
 }
 
 ###
@@ -74,13 +104,18 @@ dump_logs()
  # suggest either a false positive, or an intentionally disconnected state.
  # No matter which solution we choose, we must trigger a log dump for forensic
  # purposes.
+ #
+ # @param sType  String describing type of LoS being repaired.
+ #     Should be 'ghost' or 'full'.
 ##
 fix_los()
 {
+  sType=$1
+
   # First and foremost, do not touch the radio during an active phone call.
 
   if [ $(dumpsys telephony.registry | grep -c mCallState=0) -lt 1 ]; then
-    log -p i -t LoSD "Active phone call, skipping restart."
+    log_los "Active phone call, skipping restart."
     return
   fi
 
@@ -88,9 +123,11 @@ fix_los()
   # in that case, because the LoS is intentional.
 
   if [ $(dumpsys location | grep -c 'AirplaneMode 1') -gt 0 ]; then
-    log -p i -t LoSD "Airplane mode detected, skipping restart."
+    log_los "Airplane mode detected, skipping restart."
     return
   fi
+
+  log_los "${sType} LoS confirmed." w
 
   # Now, try to kill the radio daemon. In some cases, this can fix LoS. Then
   # wait 10 seconds. We do this as many times as requested, in case we merely
@@ -98,7 +135,7 @@ fix_los()
   # or the service is still lost, continue to the reboot step.
 
   for nTry in $(seq 1 1 ${RESTARTS}); do
-    log -p w -t LoSD "Attempt #${nTry} to kill radio daemon..."
+    log_los "Attempt #${nTry} to kill radio daemon..." w
     killall rild
     sleep 10
 
@@ -108,7 +145,7 @@ fix_los()
 
     bRadio=$(dumpsys connectivity | grep "mobile\[" | grep -c "able: true")
     if [ $bRadio -eq 1 ]; then
-      log -p i -t LoSD "RILD restart successful."
+      log_los "RILD restart successful."
       if [ $DUMPLOGS -eq 1 ]; then
         dump_logs
       fi
@@ -118,7 +155,7 @@ fix_los()
 
   # :(
 
-  log -p e -t LoSD "RILD restart failed. Rebooting."
+  log_los "RILD restart failed. Rebooting." e
   if [ $DUMPLOGS -eq 1 ]; then
     dump_logs
   fi
@@ -127,7 +164,7 @@ fix_los()
 
 # Program Body
 
-log -p i -t LoSD "LoSD Starting"
+log_los "LoSD Starting"
 
 # Enter the main program loop. We sleep first so we can abort after each
 # check and immediately wait for the next iteration of checks.
@@ -146,8 +183,8 @@ while : ; do
   # radio status.
 
   if [ "${sConnStatus#*UNKNOWN/UNKNOWN}" != "$sConnStatus" ]; then
-    log -p i -t LoSD "Detected ghost LoS."
-    fix_los
+    log_los "Detected ghost LoS."
+    fix_los ghost
     continue
   fi
 
@@ -155,8 +192,8 @@ while : ; do
   # radio, the CDMA radio should *always* be available.
 
   if [ "${sConnStatus#*isAvailable: false}" != "$sConnStatus" ]; then
-    log -p i -t LoSD "Confirmed radio unavailable."
-    fix_los
+    log_los "Confirmed radio unavailable."
+    fix_los full
     continue
   fi
 
@@ -164,8 +201,8 @@ while : ; do
   # that by getting a logcat and looking for error state.
 
   if [ $(logcat -b radio -d -s RILClient:E | grep -c ': Error') -gt 1 ]; then
-    log -p i -t LoSD "Detected bad RIL Client - ghost LoS."
-    fix_los
+    log_los "Detected bad RIL Client - ghost LoS."
+    fix_los ghost
     continue
   fi
 
@@ -173,15 +210,15 @@ while : ; do
   # GENERIC_FAILURE messages. That's definitely not normal.
 
   if [ $(logcat -b radio -d -s RILJ:D | grep -c GENERIC_FAILURE) -gt 1 ]; then
-    log -p i -t LoSD "Detected bad RILJ daemon - ghost LoS."
-    fix_los
+    log_los "Detected bad RILJ daemon - ghost LoS."
+    fix_los ghost
     continue
   fi
 
   # If we got this far, the radio has no *known* defects. Say so and restart
   # the loop.
 
-  log -p i -t LoSD "Radio appears normal - no LoS."
+  log_los "Radio appears normal - no LoS."
 
 done
 

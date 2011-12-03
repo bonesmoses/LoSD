@@ -1,3 +1,7 @@
+Version 0.8.0
+ * Now maintains a separate log for tracking all LoS events.
+ * Added DEBUG configuration setting.
+
 Version 0.7.1
  * Fixed typo in AirplaneMode check. Should no longer reboot in airplane mode.
 
