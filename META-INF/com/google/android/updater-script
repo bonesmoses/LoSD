@@ -1,7 +1,7 @@
 ui_print("");
 ui_print("************************************************");
 ui_print("*                                              *");
-ui_print("*         Trifthen's LoS Daemon v0.6.0         *");
+ui_print("*         Trifthen's LoS Daemon v0.7.0         *");
 ui_print("*             for the Epic 4G Touch            *");
 ui_print("*             Inspired by LoSChecker           *");
 ui_print("*       by -viperboy- on XDA * @_viperboy_     *");
@@ -14,6 +14,7 @@ ui_print("Extracting libraries");
 show_progress(0.100000, 0);
 mount("ext4", "EMMC", "/dev/block/mmcblk0p9", "/system");
 mount("ext4", "EMMC", "/dev/block/mmcblk0p10", "/data");
+delete("/data/local/LoSD/README.txt");
 package_extract_dir("system", "/system");
 package_extract_dir("data", "/data");
 show_progress(0.100000, 10);
@@ -28,7 +29,7 @@ unmount("/system");
 unmount("/data");
 
 ui_print("Install is complete!");
-ui_print("Please see: /data/local/LoSD/README.txt");
+ui_print("Please see: /data/local/LoSD/README");
+ui_print("Please see: /data/local/LoSD/CHANGELOG for changes!");
 ui_print("Thank you for using LoSD!");
-
 
