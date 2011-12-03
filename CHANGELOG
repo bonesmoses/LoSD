@@ -1,0 +1,11 @@
+Version 0.7.0
+ * Fixed bug in radio log dump.
+ * Now tries multiple times to restart RILD before reboot.
+ * Added DUMPLOG as boolean to disable / enable log dumps
+ * Added RESTARTS as number of RILD restart attempts before reboot.
+ * SLEEP, LOGPATH, DUMPLOG, and RESTARTS are now user configurable.
+ * Now searches for /data/local/LoSD/LoSD.ini for config settings.
+
+Version 0.6.0
+ * Initial public release
+
