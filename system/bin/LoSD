@@ -7,7 +7,7 @@
 #                    be unable to stay connected to the carrier's towers. This
 #                    daemon will detect these occurrences and attempt to
 #                    repair them.
-# Version:           0.8.0
+# Version:           0.8.1
 # Date:              2011-12-03
 ### END DAEMON INFO
 
@@ -52,9 +52,8 @@ dump_logs()
   mkdir $LOGPATH/temp
 
   dmesg > $LOGPATH/temp/dmesg.log
-  bugreport -d > $LOGPATH/temp/bugreport.log
+  bugreport > $LOGPATH/temp/bugreport.log
   dumpsys connectivity > $LOGPATH/temp/connectivity.log
-  logcat -v time -d -s LoSD:* > $LOGPATH/temp/LoSD.log
   logcat -b radio -v time -d > $LOGPATH/temp/radio.log
 
   mv $LOGPATH/temp $LOGPATH/$(date +"%Y-%m-%d_%H:%M:%S")

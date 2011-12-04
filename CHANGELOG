@@ -1,3 +1,8 @@
+Version 0.8.1
+ * Fixed bug in grabbing bugreport dump.
+ * Now removes -viperboy-'s LoSChecker on install.
+ * Removed LoSD logcat dump in favor of persistent LoSD.log.
+
 Version 0.8.0
  * Now maintains a separate log for tracking all LoS events.
  * Added DEBUG configuration setting.
