@@ -24,6 +24,8 @@ but check the feature list before installing.
 USAGE
 -----
 
+    LoSD [dump]
+
 If you just obtained the script, simply place it somewhere on your android
 phone that is mounted as an executable partition, and execute it in a shell:
 
@@ -32,6 +34,11 @@ phone that is mounted as an executable partition, and execute it in a shell:
 At that point, it will begin checking for loss of service and repairing it
 when encountered. If you installed the flashable zip, your phone will
 automatically launch the LoS daemon at every boot.
+
+If called with the 'dump' command, LoSD will dump all debugging logs and exit,
+creating a timestamped directory in LOGPATH, as well as a tar archive named
+logs.tar.gz. This lets a user capture situations where LoSD did not detect
+a LoS, and send the logs for analysis.
 
 CONFIGURATION
 -------------
@@ -57,7 +64,7 @@ Currently recognized settings:
 * **LOGPATH**
 
     Full path to where logs should be dumped. This is also where LoSD keeps
-    its own LoSD.log file. Default is /usr/local/LoSD because the daemon
+    its own LoSD.log file. Default is /data/local/LoSD because the daemon
     knows that directory exists. Feel free to place it somewhere on your
     SD card.
 
@@ -139,17 +146,16 @@ re-enable them if you want dumps.
 
 > Q: I think I have LoS the daemon didn't detect. How do I get logs?
 
-Very easily! Just do this with ADB:
-
-    adb bugreport > los.log
-
-Or with a terminal:
+Very easily! LoSD has a built-in logging command! Just type this into a
+terminal, or an 'adb shell':
 
     su
-    bugreport > /sdcard/los.log
+    LoSD dump
 
-And use your favorite site (pastebin, etc) to host the file for us to
-analyze.
+This will create a timestamped directory just like LoSD had detected it. In
+addition, a file named logs.tar.gz will be dropped in your LOGPATH directory
+(that's /data/local/LoSD by default) you can send to us. We recommend putting
+it in dropbox, or some other binary-file hosting site.
 
 CREDITS
 -------
