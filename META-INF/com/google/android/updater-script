@@ -1,7 +1,8 @@
 ui_print("");
 ui_print("************************************************");
 ui_print("*                                              *");
-ui_print("*         Trifthen's LoS Daemon v0.8.1         *");
+ui_print("*               LoS Repair Daemon              *");
+ui_print("*         by Trifthen on XDA * @Trifthen       *");
 ui_print("*             for the Epic 4G Touch            *");
 ui_print("*             Inspired by LoSChecker           *");
 ui_print("*       by -viperboy- on XDA * @_viperboy_     *");
