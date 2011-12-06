@@ -7,8 +7,8 @@
 #                    be unable to stay connected to the carrier's towers. This
 #                    daemon will detect these occurrences and attempt to
 #                    repair them.
-# Version:           0.8.1
-# Date:              2011-12-03
+# Version:           0.9.0
+# Date:              2011-12-05
 ### END DAEMON INFO
 
 # Change these in /data/local/LoSD/LoSD.ini
@@ -161,6 +161,23 @@ fix_los()
   reboot
 }
 
+# As a special case, if we get called with 'dump' as an option, we should 
+# output all known logs as if we encountered a LoS, and exit.
+
+if [ "$1" == "dump" ]; then
+  log_los "User manually dumped logs."
+  echo -n "Dumping logs... "
+  dump_logs
+  echo "Done!"
+
+  sDump=$(find $LOGPATH -type d -mindepth 1 | sort -rn | head -n 1)
+  tar -czf $LOGPATH/logs.tar.gz -C $LOGPATH ${sDump##*/}
+
+  echo "Please check ${sDump} for logs."
+  echo "Or, send $LOGPATH/logs.tar.gz to Trifthen."
+  exit
+fi
+
 # Program Body
 
 log_los "LoSD Starting"
@@ -177,6 +194,25 @@ while : ; do
 
   sConnStatus=$(dumpsys connectivity | grep "mobile\[")
 
+  # The radio might be in a CONNECTING state. That means it's changing towers
+  # or trying to roam. Any errors we receive during this are likely false
+  # positives. In true LoS or ghost LoS, the state is (dis)connected.
+
+  if [ "${sConnStatus#*CONNECTING}" != "$sConnStatus" ]; then
+    log_los "Currently between towers. No LoS."
+    continue
+  fi
+
+  # "isAvailable: true" is the first check. No matter the state of any other
+  # radio, the CDMA radio should *always* be available. If this is false,
+  # there's no need to check for ghost LoS.
+
+  if [ "${sConnStatus#*isAvailable: false}" != "$sConnStatus" ]; then
+    log_los "Confirmed radio unavailable."
+    fix_los full
+    continue
+  fi
+
   # In some cases of ghost LoS, the radio gets confused and doesn't know its
   # own state. We check this first because it's independant of the perceived
   # radio status.
@@ -184,15 +220,6 @@ while : ; do
   if [ "${sConnStatus#*UNKNOWN/UNKNOWN}" != "$sConnStatus" ]; then
     log_los "Detected ghost LoS."
     fix_los ghost
-    continue
-  fi
-
-  # "isAvailable: true" is the next check. No matter the state of any other
-  # radio, the CDMA radio should *always* be available.
-
-  if [ "${sConnStatus#*isAvailable: false}" != "$sConnStatus" ]; then
-    log_los "Confirmed radio unavailable."
-    fix_los full
     continue
   fi
 
