@@ -10,9 +10,11 @@ This software is meant to fix persistent loss of service, and ghost loss
 of service issues plaguing the Epic 4G Touch, though it can probably be
 easily adapted to other devices. It does this by either:
 
-1. Killing problematic radio daemons when detected.
+1. Restarting problematic radio daemons when detected.
 2. Rebooting when all attempts to fix have failed.
-3. Create a log dump of various system logs for debugging purposes.
+
+In addition, it can create a log dump of various system logs for
+debugging purposes.
 
 REQUIREMENTS
 ------------
@@ -59,7 +61,7 @@ Currently recognized settings:
 * **DUMPLOGS**
 
     Whether or not logs should be dumped during a LoS repair or system reboot.
-    Should be 0 for false, or 1 for true. Default is curently 1.
+    Should be 0 for false, or 1 for true. Default is curently 0.
 
 * **LOGPATH**
 
@@ -74,6 +76,13 @@ Currently recognized settings:
     up and initiating a system reboot. Default is 2. This setting was primarily
     defined because ghost LoS can sometimes degrade into full LoS, and
     subsequent radio restarts may be necessary to regain service.
+
+* **RESTART_LIMIT**
+
+    How many successful radio restarts before LoSD considers the phone state
+    tainted? Too many RILD restarts may damage other services, or cause other
+    unknown side effects. After this limit is reached, further LoS events
+    will *not* result in an RILD restart, but a full reboot. Default is 3.
 
 * **SLEEP**
 
@@ -132,17 +141,16 @@ for when the fix was attempted, or a reboot was triggered.
 
 > Q: Help! My log directory is getting huge!
 
-If you're in a spotty coverage area, the log directory may start to fill
+By default, LoSD will not dump system logs when it repairs a LoS. But you
+may have enabled it on your own if you modified the configuration file. If
+you're in a spotty coverage area, the log directory may start to fill
 with several timestamped log dumps, each of which are around 5MB. If you'd
-like to stop this, please create a file named LoSD.ini in your
-/data/local/LoSD directory, and make sure it contains the following line:
+like to stop this, please ensure your LoSD.ini configuration file does not
+contain the following line:
 
-    DUMPLOGS=0
+    DUMPLOGS=1
 
-This will disable log dumping during LoS repair. The current default is to
-log because the script is still in beta status. When we're sure the check is
-more stable, it will be disabled by default, and you'll have to manually
-re-enable them if you want dumps.
+Such a line will enable log dumping, which again, is disabled by default!
 
 > Q: I think I have LoS the daemon didn't detect. How do I get logs?
 
