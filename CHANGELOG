@@ -1,3 +1,10 @@
+Version 1.0.0
+ * Log dumping is now disabled by default.
+ * Now uses 'setprop ctl.stop/ctl.start' to try restarting RILD nicely.
+ * Does a quick check to prevent multiple running copies.
+ * Added a radio restart limit to avoid glitchy post-fix systems.
+ * Clear radio log in case of false positive ghost LoS.
+
 Version 0.9.0
  * Added non-LoS check for transient CONNECTING status.
  * Now check for ghost LoS *after* standard LoS.
