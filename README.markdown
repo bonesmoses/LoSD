@@ -19,9 +19,12 @@ debugging purposes.
 REQUIREMENTS
 ------------
 
-For this to utility to function properly, your phone must be rooted and
-busybox must be installed. Many ROMs and custom kernels do this automatically,
-but check the feature list before installing.
+* Phone must be rooted.
+* An init.d compatible kernel.
+* Busybox must be installed.
+
+Many ROMs and custom kernels do this automatically, but check the feature
+of your basic tool-chain before installing.
 
 USAGE
 -----
@@ -54,9 +57,9 @@ Currently recognized settings:
 
 * **DEBUG**
 
-    Many log entries are only informative in nature. To prevent these from
-    being entered into the system logs and LoSD.log, set this to 0.
-    Default is 1.
+    Many log entries are only informative in nature and can be very noisy.
+    If you are having trouble and want to see LoSD activity reported in the
+    system logs and LoSD.log, set this to 1. Default is 0.
 
 * **DUMPLOGS**
 
