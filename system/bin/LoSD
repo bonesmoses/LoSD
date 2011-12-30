@@ -7,8 +7,8 @@
 #                    be unable to stay connected to the carrier's towers. This
 #                    daemon will detect these occurrences and attempt to
 #                    repair them.
-# Version:           0.9.0
-# Date:              2011-12-05
+# Version:           1.2.0
+# Date:              2011-12-27
 ### END DAEMON INFO
 
 # Change these in /data/local/LoSD/LoSD.ini
@@ -18,7 +18,7 @@ if [ -f /data/local/LoSD/LoSD.ini ]; then
   . /data/local/LoSD/LoSD.ini
 fi
 
-DEBUG=${DEBUG:-1}                       # Debug messages in logs? 0/1.
+DEBUG=${DEBUG:-0}                       # Debug messages in logs? 0/1.
 DUMPLOGS=${DUMPLOGS:-0}                 # Should we dump logs during fix?
 LOGPATH=${LOGPATH:-/data/local/LoSD}    # Directory where logs should be saved
 RESTARTS=${RESTARTS:-2}                 # RILD restart attempts before reboot
@@ -29,6 +29,19 @@ SLEEP=${SLEEP:-120}                     # Seconds between LoS checks
 ################################################################################
 
 # Function Definitions
+
+###
+ # Clear triggers that detected LoS.
+ #
+ # If LoS is detected from a system log or some other source, we should reset
+ # that value to empty so subsequent detections don't re-detect that error.
+ # Otherwise we'll just end up restarting the radio over and over again on
+ # the same error. No good!
+##
+clear_triggers()
+{
+  logcat -b radio -c
+}
 
 ###
  # Dump system logs to a path readable by a regular user.
@@ -56,12 +69,9 @@ dump_logs()
   bugreport > $LOGPATH/temp/bugreport.log
   dumpsys connectivity > $LOGPATH/temp/connectivity.log
   logcat -b radio -v time -d > $LOGPATH/temp/radio.log
+  logcat -b main -v time -d -s LoSD:* > $LOGPATH/temp/LoSD.log
 
   mv $LOGPATH/temp $LOGPATH/$(date +"%Y-%m-%d_%H:%M:%S")
-
-  # Clear the radio log so we stop re-detecting repaired LoS events.
-
-  logcat -b radio -c
 }
 
 ###
@@ -80,18 +90,23 @@ dump_logs()
 log_los()
 {
   sMessage=$1
-  sLogType='Info'
+  sTag=$2
 
-  if [ "$2" == 'w' ]; then
+  if [ "${sTag}" == 'w' ]; then
     sLogType='Warning'
-  elif [ "$2" == 'e' ]; then
+  elif [ "${sTag}" == 'e' ]; then
     sLogType='Error'
+  elif [ "${sTag}" == 'd' ]; then
+    sLogType='Debug'
+  else
+    sTag=i
+    sLogType='Info'
   fi
 
-  if [ "$sLogType" != 'Info' ] || [ $DEBUG -gt 0 ]; then
+  if [ "$sLogType" != 'Debug' ] || [ $DEBUG -gt 0 ]; then
     echo "$(date +'%Y-%m-%d %H:%M:%S') : $sLogType : $sMessage" >> \
          $LOGPATH/LoSD.log
-    log -p $sLogType -t LoSD "$sMessage"
+    log -p $sTag -t LoSD "$sMessage"
   fi
 }
 
@@ -112,22 +127,19 @@ fix_los()
 {
   sType=$1
 
-  # First and foremost, do not touch the radio during an active phone call.
+  # A ghost LoS trigger may have been caused by a phone call, but since we
+  # don't check anything during phone calls, later checks may pick it up.
+  # In that case, let's sanity check certain ghost LoS scenarios.
 
-  if [ $(dumpsys telephony.registry | grep -c mCallState=0) -lt 1 ]; then
-    log_los "Active phone call, skipping restart."
-    if [ "${sType}" == "ghost" ]; then
-      logcat -b radio -c # Radio log was false positive. Clear.
+  if [ "$sType" == "ghost" ]; then
+    nCDMA=$(logcat -v time -d -s -b radio RILJ:D RILClient:E CDMA:D |
+            egrep 'RINGING|OFFHOOK|: Error 2' | grep -c CDMA)
+
+    if [ $nCDMA -gt 1 ]; then
+      log_los "Ghost LoS false positive; caused by call. Ignoring." d
+      clear_triggers
+      return
     fi
-    return
-  fi
-
-  # Next, make sure we're not in airplane mode. We should never reboot
-  # in that case, because the LoS is intentional.
-
-  if [ $(dumpsys location | grep -c 'AirplaneMode 1') -gt 0 ]; then
-    log_los "Airplane mode detected, skipping restart."
-    return
   fi
 
   log_los "Confirmed ${sType} LoS." w
@@ -172,10 +184,11 @@ fix_los()
     bRadio=$(dumpsys connectivity | grep "mobile\[" | grep -c "able: true")
     if [ $bRadio -eq 1 ]; then
       RILD_COUNT=$(( $RILD_COUNT + 1 ))
-      log_los "RILD restart successful."
+      log_los "RILD restart successful." d
       if [ $DUMPLOGS -eq 1 ]; then
         dump_logs
       fi
+      clear_triggers
       return
     fi
   done # End RILD restart loop
@@ -228,18 +241,36 @@ while : ; do
 
   sleep $SLEEP
 
+  # First and foremost, an active phone call is clearly not LoS.
+
+  if [ $(dumpsys telephony.registry | grep -c mCallState=0) -lt 1 ]; then
+    log_los "Active phone call." d
+    continue
+  fi
+
+  # Next, make sure we're not in airplane mode. We should ignore further checks
+  # in that case, because the LoS is intentional.
+
+  if [ $(dumpsys location | grep -c 'AirplaneMode 1') -gt 0 ]; then
+    log_los "Airplane mode detected, skipping restart." d
+    continue
+  fi
+
   # Grab connectivity status from the system. We can use this string for
   # several checks.
 
   sConnStatus=$(dumpsys connectivity | grep "mobile\[")
 
-  # The radio might be in a CONNECTING state. That means it's changing towers
-  # or trying to roam. Any errors we receive during this are likely false
-  # positives. In true LoS or ghost LoS, the state is (dis)connected.
+  bRoaming=0
+  if [ "${sConnStatus#*roaming: true}" != "$sConnStatus" ]; then
+    log_los "Currently roaming." d
+    bRoaming=1
+  fi
 
+  bConnecting=0
   if [ "${sConnStatus#*CONNECTING}" != "$sConnStatus" ]; then
-    log_los "Currently between towers. No LoS."
-    continue
+    log_los "Currently between towers." d
+    bConnecting=1
   fi
 
   # "isAvailable: true" is the first check. No matter the state of any other
@@ -247,7 +278,7 @@ while : ; do
   # there's no need to check for ghost LoS.
 
   if [ "${sConnStatus#*isAvailable: false}" != "$sConnStatus" ]; then
-    log_los "Confirmed radio unavailable."
+    log_los "Confirmed radio unavailable." w
     fix_los full
     continue
   fi
@@ -257,7 +288,7 @@ while : ; do
   # radio status.
 
   if [ "${sConnStatus#*UNKNOWN/UNKNOWN}" != "$sConnStatus" ]; then
-    log_los "Detected ghost LoS."
+    log_los "Detected ghost LoS." w
     fix_los ghost
     continue
   fi
@@ -266,7 +297,7 @@ while : ; do
   # that by getting a logcat and looking for error state.
 
   if [ $(logcat -b radio -d -s RILClient:E | grep -c ': Error') -gt 1 ]; then
-    log_los "Detected bad RIL Client - ghost LoS."
+    log_los "Detected bad RIL Client - ghost LoS." w
     fix_los ghost
     continue
   fi
@@ -274,8 +305,20 @@ while : ; do
   # In the same idea as the RILClient, sometimes RILJ just does crazy with
   # GENERIC_FAILURE messages. That's definitely not normal.
 
-  if [ $(logcat -b radio -d -s RILJ:D | grep -c GENERIC_FAILURE) -gt 1 ]; then
-    log_los "Detected bad RILJ daemon - ghost LoS."
+  if [ $(logcat -b radio -d -s RILJ:D | 
+         grep -c 'RIL_REQUEST_CDMA_GET_SYSTEMPROPERTIES error') -gt 1 ]; then
+    log_los "Detected bad RILJ daemon - ghost LoS." w
+    fix_los ghost
+    continue
+  fi
+
+  # The CDMA radio seems to have a connection tracker. If that gets stuck in
+  # a failed state repeatedly, we have a particularly sneaky ghost LoS. We
+  # also need at least 2 of these errors before continuing.
+
+  if [ $(logcat -b radio -d -s CDMA:D | 
+         grep 'CdmaDataConnectionTracker' | grep Unknown) -gt 1 ]; then
+    log_los "Detected bad CDMA status - ghost LoS." w
     fix_los ghost
     continue
   fi
@@ -283,7 +326,7 @@ while : ; do
   # If we got this far, the radio has no *known* defects. Say so and restart
   # the loop.
 
-  log_los "Radio appears normal - no LoS."
+  log_los "Radio appears normal - no LoS." d
 
 done
 

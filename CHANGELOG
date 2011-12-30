@@ -1,3 +1,17 @@
+Version 1.2.0
+ * Added debug log level.
+ * Moved several informative messages to debugging only.
+ * Debugging is now disabled by default.
+ * Tweaked RILJ error detection for RIL_REQUEST_CDMA_GET_SYSTEMPROPERTIES.
+ * Can now ignore false positive ghost LoS caused by phone calls.
+ * Phone call and Airplane mode now checked before anything else.
+ * CONNECTING status no longer skips LoS check.
+ * Added ghost LoS check for CDMA 'Unknown data error' messages.
+
+Version 1.1.0
+ * Experimental build - not released
+ * Tried new LoS check based on 'radio is down' log message.
+
 Version 1.0.0
  * Log dumping is now disabled by default.
  * Now uses 'setprop ctl.stop/ctl.start' to try restarting RILD nicely.
