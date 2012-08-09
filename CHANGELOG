@@ -1,3 +1,11 @@
+Version 1.3.1
+ * Added third Airplane mode check for ICS firmwares.
+ * Third firmware check also works on phones with disabled logcat.
+
+Version 1.3.0
+ * Improved CDMA connection FAILED detection.
+ * Added second Airplane mode check for EL13, EL26, EL29 firmwares.
+
 Version 1.2.0
  * Added debug log level.
  * Moved several informative messages to debugging only.

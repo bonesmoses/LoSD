@@ -7,8 +7,8 @@
 #                    be unable to stay connected to the carrier's towers. This
 #                    daemon will detect these occurrences and attempt to
 #                    repair them.
-# Version:           1.2.0
-# Date:              2011-12-27
+# Version:           1.3.1
+# Date:              2012-08-08
 ### END DAEMON INFO
 
 # Change these in /data/local/LoSD/LoSD.ini
@@ -65,11 +65,11 @@ dump_logs()
 
   mkdir $LOGPATH/temp
 
-  dmesg > $LOGPATH/temp/dmesg.log
-  bugreport > $LOGPATH/temp/bugreport.log
-  dumpsys connectivity > $LOGPATH/temp/connectivity.log
-  logcat -b radio -v time -d > $LOGPATH/temp/radio.log
-  logcat -b main -v time -d -s LoSD:* > $LOGPATH/temp/LoSD.log
+  dmesg &> $LOGPATH/temp/dmesg.log
+  bugreport &> $LOGPATH/temp/bugreport.log
+  dumpsys connectivity &> $LOGPATH/temp/connectivity.log
+  logcat -b radio -v time -d &> $LOGPATH/temp/radio.log
+  logcat -b main -v time -d -s LoSD:* &> $LOGPATH/temp/LoSD.log
 
   mv $LOGPATH/temp $LOGPATH/$(date +"%Y-%m-%d_%H:%M:%S")
 }
@@ -251,7 +251,11 @@ while : ; do
   # Next, make sure we're not in airplane mode. We should ignore further checks
   # in that case, because the LoS is intentional.
 
-  if [ $(dumpsys location | grep -c 'AirplaneMode 1') -gt 0 ]; then
+  if [ $(dumpsys location | grep -c 'AirplaneMode 1') -gt 0 ] ||
+     [ $(logcat -d -s System.out 2>/dev/null | grep mAirPlane | tail -1 | 
+         grep -c ':true') -gt 0 ] ||
+     [ $(logcat -b system -d | grep AirPlaneMode | tail -1 |
+         grep -c 'Mode = 1') -gt 0 ]; then
     log_los "Airplane mode detected, skipping restart." d
     continue
   fi
@@ -314,10 +318,10 @@ while : ; do
 
   # The CDMA radio seems to have a connection tracker. If that gets stuck in
   # a failed state repeatedly, we have a particularly sneaky ghost LoS. We
-  # also need at least 2 of these errors before continuing.
+  # also need at least 3 of these errors before continuing.
 
-  if [ $(logcat -b radio -d -s CDMA:D | 
-         grep 'CdmaDataConnectionTracker' | grep Unknown) -gt 1 ]; then
+  if [ $bConnecting -gt 0 ] && [ $(logcat -b radio -d -s CDMA:D | 
+         grep 'CdmaDataConnectionTracker' | grep -c FAIL) -gt 2 ]; then
     log_los "Detected bad CDMA status - ghost LoS." w
     fix_los ghost
     continue
